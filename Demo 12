@@ -1,0 +1,124 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct Member
+{
+    char name[50];
+    float hours;
+    float savings;
+};
+
+int main() {
+
+
+    int choice;
+    double amount;
+    double withdraw;
+    double balance = 1000000;
+    float hoursAdded;
+    float hoursUsed;
+    float goal; 
+    FIlE *fp;
+    
+    struct Member user;
+
+
+    user.hours = 0;
+    user.savings = 0;
+
+    printf("Enter Name: \n");
+    scanf("%s", user.name);
+
+    printf("Welcome To The Neighboring Time Bank \n");
+
+    while(1){
+        printf("1. Check Account Balance \n");
+        printf("2. Deposit Money \n");
+        printf("3. Use service Hours\n");
+        printf("4. Savings\n");
+        printf("5.View Member Directory\n");
+        printf("6. Withdraw Money \n");
+        printf("7. Exit \n");
+
+        printf("Enter Choice: \n");
+        scanf("%d", &choice);
+
+                switch (choice)
+        {
+            case 1:
+                printf("\nMember Name: %s\n", user.name);
+                printf("Hours Available: %.2f\n", user.hours);
+                printf("Savings: %.2f\n", user.savings);
+                break;
+
+            case 2:
+                printf("Enter Hours Earned: ");
+                scanf("%f", &hoursAdded);
+
+                if (hoursAdded > 0)
+                {
+                    user.hours += hoursAdded;
+                    user.savings += hoursAdded;
+
+                    fp = fopen("transactions.txt", "a");
+
+                    if (fp != NULL)
+                    {
+                        fprintf(fp,
+                                "%s deposited %.2f service hours\n",
+                                user.name,
+                                hoursAdded);
+                        fclose(fp);
+                    }
+
+                    printf("Hours Added Successfully!\n");
+                }
+                else
+                {
+                    printf("Invalid Hours.\n");
+                }
+                break;
+
+            case 3:
+                printf("Enter Hours To Use: ");
+                scanf("%f", &hoursUsed);
+
+                if (hoursUsed > 0 && hoursUsed <= user.hours)
+                {
+                    user.hours -= hoursUsed;
+
+                    fp = fopen("transactions.txt", "a");
+
+                    if (fp != NULL)
+                    {
+                        fprintf(fp,
+                                "%s used %.2f service hours\n",
+                                user.name,
+                                hoursUsed);
+                        fclose(fp);
+                    }
+
+                    printf("Hours Used Successfully!\n");
+                }
+                else
+                {
+                    printf("Not Enough Hours Available.\n");
+                }
+                break;
+
+            case 4:
+                printf("Current Savings: %.2f Hours\n",
+                       user.savings);
+                break;
+
+            case 5:
+
+            break; 
+                
+
+               
+    }
+
+    return 0;
+}
