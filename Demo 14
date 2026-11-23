@@ -1,0 +1,336 @@
+#include <ctype.h>
+#include <errno.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct Member
+{
+    char name[50];
+    float hours;
+    float savings;
+};
+
+enum InputResult { INPUT_END, INPUT_INVALID, INPUT_OK };
+
+/* Consume an entire entry so extra characters cannot become the next choice. */
+static enum InputResult readLine(char line[], int size)
+{
+    if (fgets(line, size, stdin) == NULL)
+    {
+        return INPUT_END;
+    }
+
+    char *newline = strchr(line, '\n');
+    if (newline != NULL)
+    {
+        *newline = '\0';
+        return INPUT_OK;
+    }
+
+    int next = getchar();
+    if (next == '\n' || next == EOF)
+    {
+        return INPUT_OK;
+    }
+
+    while (next != '\n' && next != EOF)
+    {
+        next = getchar();
+    }
+    return INPUT_INVALID;
+}
+
+static enum InputResult readChoice(int *choice)
+{
+    char line[128];
+    enum InputResult result = readLine(line, sizeof(line));
+    if (result != INPUT_OK)
+    {
+        return result;
+    }
+
+    char *end;
+    errno = 0;
+    long value = strtol(line, &end, 10);
+    if (end == line || errno == ERANGE || value < 1 || value > 7)
+    {
+        return INPUT_INVALID;
+    }
+    while (isspace((unsigned char)*end))
+    {
+        end++;
+    }
+    if (*end != '\0')
+    {
+        return INPUT_INVALID;
+    }
+
+    *choice = (int)value;
+    return INPUT_OK;
+}
+
+static enum InputResult readHours(const char *prompt, float *hours)
+{
+    char line[128];
+    printf("%s", prompt);
+    fflush(stdout);
+
+    enum InputResult result = readLine(line, sizeof(line));
+    if (result == INPUT_OK)
+    {
+        char *end;
+        errno = 0;
+        float value = strtof(line, &end);
+        if (end != line && errno != ERANGE && isfinite(value) && value > 0)
+        {
+            while (isspace((unsigned char)*end))
+            {
+                end++;
+            }
+            if (*end == '\0')
+            {
+                *hours = value;
+                return INPUT_OK;
+            }
+        }
+    }
+    if (result != INPUT_END)
+    {
+        printf("[Error] Enter a positive number of hours, such as 2 or 1.5.\n");
+        return INPUT_INVALID;
+    }
+    return INPUT_END;
+}
+
+static void showHeading(const char *title)
+{
+    printf("\n%s\n", title);
+    printf("--------------------------------------------\n");
+}
+
+static void showMenu(void)
+{
+    showHeading("MAIN MENU");
+    printf("  1. Check account balance\n");
+    printf("  2. Deposit service hours\n");
+    printf("  3. Use service hours\n");
+    printf("  4. Savings and budget goal\n");
+    printf("  5. View transaction history\n");
+    printf("  6. Withdraw from savings\n");
+    printf("  7. Exit\n");
+    printf("\nChoose an option (1-7): ");
+    fflush(stdout);
+}
+
+/* Keep the original text records so existing history remains readable. */
+static void logTransaction(const char *format, const char *name, float hours)
+{
+    FILE *file = fopen("transactions.txt", "a");
+    if (file == NULL)
+    {
+        printf("[Warning] The balance was updated, but history could not be opened.\n");
+        return;
+    }
+
+    int written = fprintf(file, format, name, hours);
+    int closed = fclose(file);
+    if (written < 0 || closed != 0)
+    {
+        printf("[Warning] The balance was updated, but the history write failed.\n");
+    }
+}
+
+static void showTransactions(void)
+{
+    showHeading("TRANSACTION HISTORY");
+    FILE *file = fopen("transactions.txt", "r");
+    if (file == NULL)
+    {
+        if (errno == ENOENT)
+        {
+            printf("  No transactions recorded yet.\n");
+        }
+        else
+        {
+            printf("[Error] Transaction history could not be opened.\n");
+        }
+        return;
+    }
+
+    char line[256];
+    int atLineStart = 1;
+    while (fgets(line, sizeof(line), file) != NULL)
+    {
+        if (atLineStart)
+        {
+            printf("  ");
+        }
+        printf("%s", line);
+        atLineStart = strchr(line, '\n') != NULL;
+    }
+    if (!atLineStart)
+    {
+        printf("\n");
+    }
+    if (ferror(file))
+    {
+        printf("[Error] Transaction history could not be read completely.\n");
+    }
+    fclose(file);
+}
+
+int main(void)
+{
+    struct Member user = { "", 0.0f, 0.0f };
+    enum InputResult result;
+
+    printf("============================================\n");
+    printf("           NEIGHBORHOOD TIME BANK\n");
+    printf("     Earn and spend local service hours\n");
+    printf("============================================\n\n");
+
+    while (1)
+    {
+        printf("Enter your name (up to 49 characters): ");
+        fflush(stdout);
+        result = readLine(user.name, sizeof(user.name));
+        if (result == INPUT_END)
+        {
+            printf("\nGoodbye.\n");
+            return 0;
+        }
+        if (result == INPUT_OK && user.name[strspn(user.name, " \t\r\v\f")] != '\0')
+        {
+            break;
+        }
+        printf("[Error] Enter a name using 1 to 49 characters.\n");
+    }
+
+    printf("\nWelcome, %s.\n", user.name);
+
+    while (1)
+    {
+        int choice;
+        float amount;
+
+        showMenu();
+        result = readChoice(&choice);
+        if (result == INPUT_END)
+        {
+            break;
+        }
+        if (result == INPUT_INVALID)
+        {
+            printf("[Error] Enter a whole number from 1 to 7.\n");
+            continue;
+        }
+
+        switch (choice)
+        {
+            case 1:
+                showHeading("ACCOUNT BALANCE");
+                printf("  Member             %s\n", user.name);
+                printf("  Available hours    %9.2f\n", user.hours);
+                printf("  Savings hours      %9.2f\n", user.savings);
+                break;
+
+            case 2:
+                showHeading("DEPOSIT SERVICE HOURS");
+                result = readHours("Hours earned: ", &amount);
+                if (result == INPUT_OK)
+                {
+                    if (!isfinite(user.hours + amount) || !isfinite(user.savings + amount))
+                    {
+                        printf("[Error] This deposit is too large for the balance.\n");
+                        break;
+                    }
+                    user.hours += amount;
+                    user.savings += amount;
+                    printf("[Success] Deposited %.2f hours. Available: %.2f hours.\n",
+                           amount, user.hours);
+                    logTransaction("%s deposited %.2f service hours\n", user.name, amount);
+                }
+                break;
+
+            case 3:
+                showHeading("USE SERVICE HOURS");
+                printf("  Available: %.2f hours\n", user.hours);
+                result = readHours("Hours to use: ", &amount);
+                if (result == INPUT_OK)
+                {
+                    if (amount > user.hours)
+                    {
+                        printf("[Error] Only %.2f hours are available to use.\n", user.hours);
+                        break;
+                    }
+                    user.hours -= amount;
+                    printf("[Success] Used %.2f hours. Available: %.2f hours.\n",
+                           amount, user.hours);
+                    logTransaction("%s used %.2f service hours\n", user.name, amount);
+                }
+                break;
+
+            case 4:
+                showHeading("SAVINGS AND BUDGET GOAL");
+                printf("  Saved: %.2f hours\n", user.savings);
+                result = readHours("Savings goal in hours: ", &amount);
+                if (result == INPUT_OK)
+                {
+                    if (user.savings >= amount)
+                    {
+                        printf("[Success] You reached your goal of %.2f hours.\n", amount);
+                    }
+                    else
+                    {
+                        printf("You need %.2f more hours to reach your %.2f-hour goal.\n",
+                               amount - user.savings, amount);
+                    }
+                }
+                break;
+
+            case 5:
+                showTransactions();
+                break;
+
+            case 6:
+                showHeading("WITHDRAW FROM SAVINGS");
+                printf("  Saved: %.2f hours\n", user.savings);
+                result = readHours("Hours to withdraw: ", &amount);
+                if (result == INPUT_OK)
+                {
+                    if (amount > user.savings)
+                    {
+                        printf("[Error] Only %.2f hours are available in savings.\n", user.savings);
+                        break;
+                    }
+                    user.savings -= amount;
+                    printf("[Success] Withdrew %.2f hours. Savings: %.2f hours.\n",
+                           amount, user.savings);
+                    logTransaction("%s withdrew %.2f hours from savings\n", user.name, amount);
+                }
+                break;
+
+            case 7:
+                printf("\nThank you for using the Neighborhood Time Bank. Goodbye!\n");
+                return 0;
+        }
+
+        if (result == INPUT_END)
+        {
+            break;
+        }
+
+        printf("\nPress Enter to return to the main menu...");
+        fflush(stdout);
+        char pause[128];
+        if (readLine(pause, sizeof(pause)) == INPUT_END)
+        {
+            break;
+        }
+    }
+
+    printf("\nInput ended. Goodbye.\n");
+    return 0;
+}
